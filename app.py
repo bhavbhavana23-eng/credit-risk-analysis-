@@ -67,6 +67,4 @@ if st.button("Predict"):
     else:
         st.error("🔴 High Risk")
 
-    # Optional: Show probability (for testing)
-    st.write("Model Probability:", probability)
-    
+   
