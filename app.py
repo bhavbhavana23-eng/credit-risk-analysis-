@@ -1,63 +1,62 @@
 # -*- coding: utf-8 -*-
-import streamlit as st
+
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 import joblib
 
-# Load model files
-model = joblib.load("model.pkl")
-scaler = joblib.load("scaler.pkl")
-columns = joblib.load("columns.pkl")
+# 1️⃣ Load dataset
+df = pd.read_csv("loan_data.csv")   # or use pd.read_excel if needed
 
-st.title("💳 Credit Risk Analysis System")
+# 2️⃣ Remove Loan_ID if exists
+df = df.drop("Loan_ID", axis=1, errors='ignore')
 
-st.write("Enter applicant details:")
+# 3️⃣ Feature Engineering (IMPORTANT FIX)
+df["Loan_Income_Ratio"] = df["LoanAmount"] / (df["ApplicantIncome"] + df["CoapplicantIncome"] + 1)
 
-# Inputs
-ApplicantIncome = st.number_input("Applicant Income", min_value=0)
-CoapplicantIncome = st.number_input("Coapplicant Income", min_value=0)
-LoanAmount = st.number_input("Loan Amount", min_value=0)
-Loan_Amount_Term = st.number_input("Loan Amount Term", min_value=0)
-Credit_History = st.selectbox("Credit History", [0,1])
+# 4️⃣ Handle Missing Values
+df['Gender'] = df['Gender'].fillna(df['Gender'].mode()[0])
+df['Married'] = df['Married'].fillna(df['Married'].mode()[0])
+df['Dependents'] = df['Dependents'].fillna(df['Dependents'].mode()[0])
+df['Self_Employed'] = df['Self_Employed'].fillna(df['Self_Employed'].mode()[0])
+df['Credit_History'] = df['Credit_History'].fillna(df['Credit_History'].mode()[0])
+df['LoanAmount'] = df['LoanAmount'].fillna(df['LoanAmount'].mean())
+df['Loan_Amount_Term'] = df['Loan_Amount_Term'].fillna(df['Loan_Amount_Term'].mode()[0])
 
-if st.button("Predict"):
+# 5️⃣ Encode target variable
+df['Loan_Status'] = df['Loan_Status'].map({'Y':1, 'N':0})
 
-    input_data = pd.DataFrame({
-        "ApplicantIncome":[ApplicantIncome],
-        "CoapplicantIncome":[CoapplicantIncome],
-        "LoanAmount":[LoanAmount],
-        "Loan_Amount_Term":[Loan_Amount_Term],
-        "Credit_History":[Credit_History]
-    })
+# 6️⃣ One-hot encoding
+categorical_cols = ['Gender','Married','Education','Self_Employed','Property_Area','Dependents']
+df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
 
-    # Add missing columns
-    for col in columns:
-        if col not in input_data.columns:
-            input_data[col] = 0
+# 7️⃣ Split features & target
+X = df.drop('Loan_Status', axis=1)
+y = df['Loan_Status']
 
-    input_data = input_data[columns]
+# 8️⃣ Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Scale
-    input_scaled = scaler.transform(input_data)
+# 9️⃣ Scaling
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-    # Predict
-    prediction = model.predict(input_scaled)
-    prob = model.predict_proba(input_scaled)
+# 🔟 Model (IMPORTANT FIX)
+model = LogisticRegression(max_iter=1000, class_weight='balanced')
 
-    risk_score = (1 - prob[0][1]) * 100
+# Train model
+model.fit(X_train_scaled, y_train)
 
-    st.subheader("Result")
+# 1️⃣1️⃣ Accuracy
+accuracy = model.score(X_test_scaled, y_test)
+print("Model Accuracy:", accuracy)
 
-    if prediction[0] == 1:
-        st.success("Loan Approved")
-    else:
-        st.error("Loan Rejected")
+# 1️⃣2️⃣ Save files
+joblib.dump(model, "model.pkl")
+joblib.dump(scaler, "scaler.pkl")
+joblib.dump(X.columns.tolist(), "columns.pkl")
 
-    st.write(f"Risk Score: {risk_score:.2f}%")
-
-    if risk_score < 30:
-        st.success("Low Risk")
-    elif risk_score < 70:
-        st.warning("Medium Risk")
-    else:
-        st.error("High Risk")
+print("✅ Model retrained and saved successfully!")
